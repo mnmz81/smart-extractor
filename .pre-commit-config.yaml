@@ -9,17 +9,17 @@ repos:
         pass_filenames: false
       - id: ruff-check
         name: ruff check
-        entry: uv run ruff check
+        entry: scripts/uv.sh run ruff check
         language: system
         types: [python]
       - id: ruff-format
         name: ruff format
-        entry: uv run ruff format --check
+        entry: scripts/uv.sh run ruff format --check
         language: system
         types: [python]
       - id: mypy
         name: mypy
-        entry: uv run mypy
+        entry: scripts/uv.sh run mypy
         language: system
         types: [python]
         pass_filenames: false
