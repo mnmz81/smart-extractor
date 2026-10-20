@@ -2,7 +2,7 @@ from decimal import Decimal
 
 import pytest
 
-from smart_extractor.synthetic import Lang, make_invoice
+from smart_extractor.synthetic import Lang, make_invoice, make_receipt
 
 
 def test_same_seed_same_invoice() -> None:
@@ -26,3 +26,15 @@ def test_totals_are_consistent(seed: int, lang: Lang) -> None:
 def test_language_sets_currency() -> None:
     assert make_invoice(1, "en").currency == "USD"
     assert make_invoice(1, "he").currency == "ILS"
+
+
+@pytest.mark.parametrize("lang", ["en", "he"])
+@pytest.mark.parametrize("seed", range(20))
+def test_receipt_totals_are_consistent(seed: int, lang: Lang) -> None:
+    r = make_receipt(seed, lang)
+    assert r.subtotal == sum((i.total for i in r.line_items), Decimal("0"))
+    assert r.total == r.subtotal + r.tax + (r.tip or Decimal("0"))  # type: ignore[operator]
+
+
+def test_same_seed_same_receipt() -> None:
+    assert make_receipt(1) == make_receipt(1)

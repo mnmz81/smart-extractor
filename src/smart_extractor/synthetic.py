@@ -6,7 +6,7 @@ from typing import Literal
 
 from faker import Faker
 
-from smart_extractor.schemas import Invoice, LineItem
+from smart_extractor.schemas import Invoice, LineItem, Receipt
 
 Lang = Literal["he", "en"]
 _LOCALES: dict[Lang, str] = {"en": "en_US", "he": "he_IL"}
@@ -19,11 +19,7 @@ def _money(value: Decimal) -> Decimal:
     return value.quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
-def make_invoice(seed: int, lang: Lang = "en") -> Invoice:
-    """Same seed and lang always give the same invoice."""
-    fake = Faker(_LOCALES[lang])
-    fake.seed_instance(seed)
-
+def _make_items(fake: Faker, lang: Lang) -> list[LineItem]:
     items: list[LineItem] = []
     for _ in range(fake.random_int(min=1, max=6)):
         quantity = Decimal(fake.random_int(min=1, max=10))
@@ -36,7 +32,19 @@ def make_invoice(seed: int, lang: Lang = "en") -> Invoice:
                 total=_money(quantity * unit_price),
             )
         )
+    return items
 
+
+def _faker(seed: int, lang: Lang) -> Faker:
+    fake = Faker(_LOCALES[lang])
+    fake.seed_instance(seed)
+    return fake
+
+
+def make_invoice(seed: int, lang: Lang = "en") -> Invoice:
+    """Same seed and lang always give the same invoice."""
+    fake = _faker(seed, lang)
+    items = _make_items(fake, lang)
     subtotal = sum((i.total for i in items), Decimal("0"))
     tax = _money(subtotal * _TAX_RATE[lang])
     issue_date = fake.date_between(start_date="-1y", end_date="today")
@@ -52,4 +60,25 @@ def make_invoice(seed: int, lang: Lang = "en") -> Invoice:
         subtotal=subtotal,
         tax=tax,
         total=subtotal + tax,
+    )
+
+
+def make_receipt(seed: int, lang: Lang = "en") -> Receipt:
+    """Same seed and lang always give the same receipt."""
+    fake = _faker(seed, lang)
+    items = _make_items(fake, lang)
+    subtotal = sum((i.total for i in items), Decimal("0"))
+    tax = _money(subtotal * _TAX_RATE[lang])
+    tip = _money(subtotal * Decimal("0.10")) if fake.boolean() else None
+
+    return Receipt(
+        merchant_name=fake.company(),
+        purchased_at=fake.date_time_between(start_date="-1y", end_date="now"),
+        currency=_CURRENCY[lang],
+        payment_method=fake.random_element(["cash", "card"]),
+        line_items=items,
+        subtotal=subtotal,
+        tax=tax,
+        tip=tip,
+        total=subtotal + tax + (tip or Decimal("0")),
     )

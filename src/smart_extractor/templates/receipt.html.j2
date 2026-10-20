@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ 'rtl' if lang == 'he' else 'ltr' }}">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 18mm; }
+  body { font-family: "Courier New", monospace; font-size: 11pt; color: #111; }
+  .receipt { width: 80mm; margin: 0 auto; }
+  h1 { font-size: 14pt; text-align: center; margin: 0 0 4mm; }
+  .meta { text-align: center; margin-bottom: 4mm; }
+  table { width: 100%; border-collapse: collapse; }
+  td { padding: 1mm 0; vertical-align: top; }
+  td.num { text-align: end; white-space: nowrap; }
+  .rule td { border-top: 1px dashed #111; }
+  .grand td { font-weight: bold; border-top: 2px solid #111; }
+</style>
+</head>
+<body>
+<div class="receipt">
+  <h1>{{ r.merchant_name }}</h1>
+  <div class="meta">
+    {{ r.purchased_at.strftime('%Y-%m-%d %H:%M') }}
+    {% if r.payment_method %}<br>{{ t.payment }}: {{ t[r.payment_method] }}{% endif %}
+  </div>
+  <table>
+    {% for item in r.line_items %}
+      <tr>
+        <td>{{ item.description }}<br>{{ item.quantity }} x {{ item.unit_price }}</td>
+        <td class="num">{{ item.total }}</td>
+      </tr>
+    {% endfor %}
+    <tr class="rule"><td>{{ t.subtotal }}</td><td class="num">{{ r.subtotal }}</td></tr>
+    {% if r.tax is not none %}<tr><td>{{ t.tax }}</td><td class="num">{{ r.tax }}</td></tr>{% endif %}
+    {% if r.tip is not none %}<tr><td>{{ t.tip }}</td><td class="num">{{ r.tip }}</td></tr>{% endif %}
+    <tr class="grand"><td>{{ t.total }} ({{ r.currency }})</td><td class="num">{{ r.total }}</td></tr>
+  </table>
+</div>
+</body>
+</html>
