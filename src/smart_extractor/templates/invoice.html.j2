@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="{{ lang }}" dir="{{ 'rtl' if lang == 'he' else 'ltr' }}">
+<head>
+<meta charset="utf-8">
+<style>
+  @page { size: A4; margin: 18mm; }
+  body { font-family: "Helvetica Neue", Arial, sans-serif; font-size: 12pt; color: #111; }
+  h1 { font-size: 22pt; margin: 0 0 8mm; }
+  .meta { margin-bottom: 8mm; line-height: 1.6; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 2mm 3mm; border-bottom: 1px solid #ccc; text-align: start; }
+  td.num, th.num { text-align: end; }
+  .totals { margin-top: 6mm; margin-inline-start: auto; width: 55%; }
+  .totals td { border: 0; }
+  .grand td { font-weight: bold; border-top: 2px solid #111; }
+</style>
+</head>
+<body>
+  <h1>{{ t.invoice }} {{ inv.invoice_number }}</h1>
+  <div class="meta">
+    <div><b>{{ t.vendor }}:</b> {{ inv.vendor_name }}</div>
+    {% if inv.customer_name %}<div><b>{{ t.customer }}:</b> {{ inv.customer_name }}</div>{% endif %}
+    <div><b>{{ t.issued }}:</b> {{ inv.issue_date.isoformat() }}</div>
+    {% if inv.due_date %}<div><b>{{ t.due }}:</b> {{ inv.due_date.isoformat() }}</div>{% endif %}
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>{{ t.description }}</th><th class="num">{{ t.qty }}</th>
+        <th class="num">{{ t.unit_price }}</th><th class="num">{{ t.amount }}</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for item in inv.line_items %}
+      <tr>
+        <td>{{ item.description }}</td>
+        <td class="num">{{ item.quantity }}</td>
+        <td class="num">{{ item.unit_price }}</td>
+        <td class="num">{{ item.total }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <table class="totals">
+    {% if inv.subtotal is not none %}<tr><td>{{ t.subtotal }}</td><td class="num">{{ inv.subtotal }}</td></tr>{% endif %}
+    {% if inv.tax is not none %}<tr><td>{{ t.tax }}</td><td class="num">{{ inv.tax }}</td></tr>{% endif %}
+    <tr class="grand"><td>{{ t.total }} ({{ inv.currency }})</td><td class="num">{{ inv.total }}</td></tr>
+  </table>
+</body>
+</html>
