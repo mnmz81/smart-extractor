@@ -25,6 +25,7 @@ wheels/
 # Private working notes and real documents — never published
 PLAN.md
 data/private/
+data/public/
 data/synthetic/
 *.sqlite
 *.db

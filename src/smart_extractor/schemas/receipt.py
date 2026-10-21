@@ -6,13 +6,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from smart_extractor.schemas.common import LineItem
 
 
-class Receipt(BaseModel):
-    """Structured data extracted from a receipt."""
+class _ReceiptBody(BaseModel):
+    """Fields shared by Receipt and PartialReceipt."""
 
     model_config = ConfigDict(extra="forbid")
 
-    merchant_name: str
-    purchased_at: datetime
     currency: str = Field(min_length=3, max_length=3, description="ISO 4217 code, e.g. USD.")
     payment_method: str | None = None
     line_items: list[LineItem] = Field(min_length=1)
@@ -20,3 +18,20 @@ class Receipt(BaseModel):
     tax: Decimal | None = Field(default=None, ge=0)
     tip: Decimal | None = Field(default=None, ge=0)
     total: Decimal = Field(ge=0)
+
+
+class Receipt(_ReceiptBody):
+    """Structured data extracted from a receipt."""
+
+    merchant_name: str
+    purchased_at: datetime
+
+
+class PartialReceipt(_ReceiptBody):
+    """Label for a document whose merchant or date is unreadable (e.g. blurred in CORD).
+
+    Metrics skip a field that is None here, so it is neither rewarded nor penalized.
+    """
+
+    merchant_name: str | None = None
+    purchased_at: datetime | None = None

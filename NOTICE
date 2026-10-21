@@ -1,0 +1,11 @@
+Third-party data
+
+CORD v2 (receipt images and annotations) is used for evaluation.
+Licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/
+Source: https://huggingface.co/datasets/naver-clova-ix/cord-v2
+Park et al., "CORD: A Consolidated Receipt Dataset for Post-OCR Parsing", NeurIPS 2019 Workshop.
+
+The data is not stored in this repository. scripts/fetch_public.sh downloads it into
+data/public/ and converts a sample into this project's Receipt schema (items, totals,
+IDR currency). Merchant and date are blurred in CORD, so they are left unlabeled
+(PartialReceipt) and not scored.
