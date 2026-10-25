@@ -43,7 +43,7 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra"
+addopts = "-q -ra"
 
 [[tool.mypy.overrides]]
 module = ["pyarrow", "pyarrow.*"]
