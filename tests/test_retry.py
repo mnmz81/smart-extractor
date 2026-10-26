@@ -2,7 +2,8 @@ from datetime import date
 from decimal import Decimal
 
 from smart_extractor.metrics import Document
-from smart_extractor.retry import extract_with_retry
+from smart_extractor.providers import SchemaFailure
+from smart_extractor.retry import RetryStats, extract_with_retry
 from smart_extractor.schemas import Invoice, LineItem
 
 
@@ -57,3 +58,36 @@ def test_none_answer_stops_without_retry() -> None:
     result = extract_with_retry(lambda previous, errors: None)
     assert result.document is None
     assert result.retries == 0
+
+
+def test_schema_failure_is_retried_with_its_errors() -> None:
+    seen: list[tuple[Document | None, list[str]]] = []
+
+    def attempt(previous: Document | None, errors: list[str]) -> Document | None:
+        seen.append((previous, errors))
+        if len(seen) == 1:
+            raise SchemaFailure(["total: not a number"])
+        return _invoice("11")
+
+    result = extract_with_retry(attempt)
+    assert seen[1] == (None, ["total: not a number"])
+    assert result.retries == 1
+    assert result.errors == []
+    assert result.document is not None
+
+
+def test_schema_failure_every_time_ends_with_no_document() -> None:
+    def attempt(previous: Document | None, errors: list[str]) -> Document | None:
+        raise SchemaFailure(["total: not a number"])
+
+    result = extract_with_retry(attempt, max_retries=2)
+    assert result.document is None
+    assert result.retries == 2
+    assert result.errors == ["total: not a number"]
+
+
+def test_stats_sum_over_documents() -> None:
+    stats = RetryStats()
+    stats.add(extract_with_retry(lambda previous, errors: _invoice("11")))
+    stats.add(extract_with_retry(lambda previous, errors: _invoice("99"), max_retries=1))
+    assert (stats.documents, stats.retried, stats.retries, stats.unresolved) == (2, 1, 1, 1)

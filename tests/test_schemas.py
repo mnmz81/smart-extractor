@@ -87,8 +87,10 @@ def test_receipt_rejects_unknown_field() -> None:
         Receipt.model_validate({**_receipt(), "invoice_number": "X"})
 
 
-def test_receipt_requires_merchant() -> None:
+def test_receipt_merchant_and_date_are_optional() -> None:
     data = _receipt()
     del data["merchant_name"]
-    with pytest.raises(ValidationError):
-        Receipt.model_validate(data)
+    del data["purchased_at"]
+    receipt = Receipt.model_validate(data)
+    assert receipt.merchant_name is None
+    assert receipt.purchased_at is None

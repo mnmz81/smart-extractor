@@ -21,10 +21,13 @@ class _ReceiptBody(BaseModel):
 
 
 class Receipt(_ReceiptBody):
-    """Structured data extracted from a receipt."""
+    """Structured data extracted from a receipt.
 
-    merchant_name: str
-    purchased_at: datetime
+    Merchant and date are None when the receipt does not show them, never guessed.
+    """
+
+    merchant_name: str | None = None
+    purchased_at: datetime | None = None
 
 
 class PartialReceipt(_ReceiptBody):

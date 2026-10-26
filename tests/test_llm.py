@@ -1,9 +1,10 @@
-from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
+from pydantic import BaseModel
+
 from smart_extractor.dataset import ManifestRow
-from smart_extractor.llm import attachment_block, extract_naive, extract_structured
+from smart_extractor.llm import extract_naive, extract_structured, parse_structured
+from smart_extractor.providers import Attachment, SchemaFailure, Usage
 from smart_extractor.schemas import Invoice
 
 ROW = ManifestRow(
@@ -16,82 +17,72 @@ VALID = (
 )
 
 
-class _FakeMessages:
-    def __init__(self, reply: str, parsed: Any = None) -> None:
-        self._reply, self._parsed = reply, parsed
+class FakeProvider:
+    """Records what it was asked and answers from a script."""
 
-    def create(self, **_: Any) -> Any:
-        return SimpleNamespace(content=[SimpleNamespace(type="text", text=self._reply)])
+    def __init__(self, reply: str = "", parsed: Any = None, fail: list[str] | None = None) -> None:
+        self.usage = Usage()
+        self.reply, self.parsed, self.fail = reply, parsed, fail
+        self.prompts: list[str] = []
+        self.attachments: list[Attachment | None] = []
 
-    def parse(self, **_: Any) -> Any:
-        return SimpleNamespace(parsed_output=self._parsed)
+    def complete(self, model: str, prompt: str) -> str:
+        self.prompts.append(prompt)
+        return self.reply
 
-
-def _client(reply: str = "", parsed: Any = None) -> Any:
-    return SimpleNamespace(messages=_FakeMessages(reply, parsed))
+    def parse[T: BaseModel](
+        self, model: str, prompt: str, schema: type[T], attachment: Attachment | None = None
+    ) -> T | None:
+        self.prompts.append(prompt)
+        self.attachments.append(attachment)
+        if self.fail:
+            raise SchemaFailure(self.fail)
+        return self.parsed  # type: ignore[no-any-return]
 
 
 def test_naive_parses_valid_json() -> None:
-    result = extract_naive(_client(VALID), "m", "text", ROW)
+    result = extract_naive(FakeProvider(reply=VALID), "m", "text", ROW)
     assert isinstance(result, Invoice)
     assert result.vendor_name == "Acme"
 
 
 def test_naive_returns_none_on_prose_and_on_wrong_keys() -> None:
-    assert extract_naive(_client("Sure! Here is the JSON: ..."), "m", "t", ROW) is None
-    assert extract_naive(_client('{"vendor": "Acme"}'), "m", "t", ROW) is None
+    assert extract_naive(FakeProvider(reply="Sure! Here is the JSON"), "m", "t", ROW) is None
+    assert extract_naive(FakeProvider(reply='{"vendor": "Acme"}'), "m", "t", ROW) is None
 
 
 def test_structured_returns_parsed_model_or_none() -> None:
     parsed = Invoice.model_validate_json(VALID)
-    assert extract_structured(_client(parsed=parsed), "m", "t", ROW) == parsed
-    assert extract_structured(_client(parsed=None), "m", "t", ROW) is None
+    assert extract_structured(FakeProvider(parsed=parsed), "m", "t", ROW) == parsed
+    assert extract_structured(FakeProvider(parsed=None), "m", "t", ROW) is None
 
 
-def test_structured_retry_prompt_contains_previous_answer_and_errors() -> None:
-    captured: dict[str, Any] = {}
-    parsed = Invoice.model_validate_json(VALID)
-
-    def parse(**kwargs: Any) -> Any:
-        captured.update(kwargs)
-        return SimpleNamespace(parsed_output=parsed)
-
-    client = SimpleNamespace(messages=SimpleNamespace(parse=parse))
-    extract_structured(client, "m", "text", ROW, previous=parsed, errors=["total is wrong"])  # type: ignore[arg-type]
-    prompt = captured["messages"][0]["content"]
-    assert "total is wrong" in prompt
-    assert "INV-1" in prompt
+def test_structured_returns_none_when_the_answer_breaks_the_schema() -> None:
+    assert extract_structured(FakeProvider(fail=["total: not a number"]), "m", "t", ROW) is None
 
 
-def test_attachment_block_picks_document_or_image(tmp_path: Path) -> None:
-    pdf, png = tmp_path / "a.pdf", tmp_path / "b.png"
-    pdf.write_bytes(b"%PDF-1.4")
-    png.write_bytes(b"\x89PNG")
-    assert attachment_block(pdf)["type"] == "document"
-    assert attachment_block(pdf)["source"]["media_type"] == "application/pdf"
-    assert attachment_block(png)["type"] == "image"
-    assert attachment_block(png)["source"]["media_type"] == "image/png"
+def test_prompt_tells_the_model_to_use_null() -> None:
+    provider = FakeProvider(parsed=None)
+    extract_structured(provider, "m", "text", ROW)
+    assert "null" in provider.prompts[0]
 
 
-def test_structured_sends_attachment_before_the_prompt() -> None:
-    captured: dict[str, Any] = {}
-    parsed = Invoice.model_validate_json(VALID)
-
-    def parse(**kwargs: Any) -> Any:
-        captured.update(kwargs)
-        return SimpleNamespace(parsed_output=parsed)
-
-    client = SimpleNamespace(messages=SimpleNamespace(parse=parse))
-    page = {"type": "document", "source": {}}
-    extract_structured(client, "m", "", ROW, attachment=page)  # type: ignore[arg-type]
-    content = captured["messages"][0]["content"]
-    assert content[0] == page
-    assert content[1]["type"] == "text"
+def test_retry_prompt_contains_previous_answer_and_errors() -> None:
+    provider = FakeProvider(parsed=Invoice.model_validate_json(VALID))
+    parse_structured(provider, "m", "text", ROW, provider.parsed, ["total is wrong"])
+    assert "total is wrong" in provider.prompts[0]
+    assert "INV-1" in provider.prompts[0]
 
 
-def test_structured_returns_none_when_model_breaks_the_schema() -> None:
-    def parse(**_: Any) -> Any:
-        Invoice.model_validate({"total": "unreadable"})  # raises ValidationError like the SDK does
+def test_schema_errors_without_a_previous_answer_still_reach_the_prompt() -> None:
+    provider = FakeProvider(parsed=None)
+    parse_structured(provider, "m", "text", ROW, None, ["total: not a number"])
+    assert "total: not a number" in provider.prompts[0]
+    assert "previous answer" not in provider.prompts[0]
 
-    client = SimpleNamespace(messages=SimpleNamespace(parse=parse))
-    assert extract_structured(client, "m", "t", ROW) is None  # type: ignore[arg-type]
+
+def test_attachment_is_passed_to_the_provider() -> None:
+    provider = FakeProvider(parsed=None)
+    page = Attachment("application/pdf", b"%PDF")
+    extract_structured(provider, "m", "", ROW, page)
+    assert provider.attachments == [page]

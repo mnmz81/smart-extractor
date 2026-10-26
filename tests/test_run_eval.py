@@ -39,3 +39,16 @@ def test_report_lists_fields(tmp_path: Path) -> None:
     report = render_report("t", "dev", evaluate(tmp_path, "dev", empty_extractor))
     assert "documents: 1 · fully correct: 0" in report
     assert "| vendor_name | 0.0% |" in report
+
+
+def test_report_shows_cost_and_retry_stats(tmp_path: Path) -> None:
+    from smart_extractor.providers import Usage
+    from smart_extractor.retry import RetryStats
+
+    usage = Usage(calls=3, input_tokens=10_000, output_tokens=2_000)
+    stats = RetryStats(documents=2, retried=1, retries=1, unresolved=0)
+    report = render_report("t", "dev", [], "claude-haiku-5-5", usage, stats)
+    assert "API calls: 3" in report
+    assert "tokens in/out: 10000/2000" in report
+    assert "cost: $0.0020" in report
+    assert "1 of 2 documents retried" in report
