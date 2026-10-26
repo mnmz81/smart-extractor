@@ -1,6 +1,9 @@
 """Run an extractor over a labeled dataset and write a per-field accuracy report.
 
 Usage: scripts/run_eval.sh [--data data/synthetic] [--split dev] [--out reports]
+       [--extractor baseline|naive|structured] [--model claude-haiku-5-5]
+
+naive and structured call the paid Anthropic API once per digital document.
 """
 
 import argparse
@@ -64,9 +67,18 @@ def main() -> None:
     parser.add_argument("--data", type=Path, default=Path("data/synthetic"))
     parser.add_argument("--split", choices=["dev", "test"], default="dev")
     parser.add_argument("--out", type=Path, default=Path("reports"))
+    parser.add_argument(
+        "--extractor", choices=["baseline", "naive", "structured"], default="baseline"
+    )
+    parser.add_argument("--model", default="claude-haiku-5-5")
     args = parser.parse_args()
-    name = f"baseline-{datetime.now():%Y%m%d-%H%M%S}"
-    report = render_report(name, args.split, evaluate(args.data, args.split, empty_extractor))
+    extractor: Extractor = empty_extractor
+    if args.extractor != "baseline":
+        from smart_extractor.llm import make_extractor  # imported here: llm imports this module
+
+        extractor = make_extractor(args.extractor, args.model)
+    name = f"{args.extractor}-{datetime.now():%Y%m%d-%H%M%S}"
+    report = render_report(name, args.split, evaluate(args.data, args.split, extractor))
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / f"{name}.md").write_text(report, encoding="utf-8")
     print(report)
