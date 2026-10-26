@@ -1,7 +1,7 @@
 """Run an extractor over a labeled dataset and write a per-field accuracy report.
 
 Usage: scripts/run_eval.sh [--data data/synthetic] [--split dev] [--out reports]
-       [--extractor baseline|naive|structured|validated] [--model claude-haiku-5-5]
+       [--extractor baseline|naive|structured|validated|vision] [--model claude-haiku-5-5]
 
 naive and structured call the paid Anthropic API once per digital document.
 """
@@ -68,7 +68,9 @@ def main() -> None:
     parser.add_argument("--split", choices=["dev", "test"], default="dev")
     parser.add_argument("--out", type=Path, default=Path("reports"))
     parser.add_argument(
-        "--extractor", choices=["baseline", "naive", "structured", "validated"], default="baseline"
+        "--extractor",
+        choices=["baseline", "naive", "structured", "validated", "vision"],
+        default="baseline",
     )
     parser.add_argument("--model", default="claude-haiku-5-5")
     args = parser.parse_args()

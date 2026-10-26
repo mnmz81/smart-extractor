@@ -1,8 +1,9 @@
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
 from smart_extractor.dataset import ManifestRow
-from smart_extractor.llm import extract_naive, extract_structured
+from smart_extractor.llm import attachment_block, extract_naive, extract_structured
 from smart_extractor.schemas import Invoice
 
 ROW = ManifestRow(
@@ -60,3 +61,29 @@ def test_structured_retry_prompt_contains_previous_answer_and_errors() -> None:
     prompt = captured["messages"][0]["content"]
     assert "total is wrong" in prompt
     assert "INV-1" in prompt
+
+
+def test_attachment_block_picks_document_or_image(tmp_path: Path) -> None:
+    pdf, png = tmp_path / "a.pdf", tmp_path / "b.png"
+    pdf.write_bytes(b"%PDF-1.4")
+    png.write_bytes(b"\x89PNG")
+    assert attachment_block(pdf)["type"] == "document"
+    assert attachment_block(pdf)["source"]["media_type"] == "application/pdf"
+    assert attachment_block(png)["type"] == "image"
+    assert attachment_block(png)["source"]["media_type"] == "image/png"
+
+
+def test_structured_sends_attachment_before_the_prompt() -> None:
+    captured: dict[str, Any] = {}
+    parsed = Invoice.model_validate_json(VALID)
+
+    def parse(**kwargs: Any) -> Any:
+        captured.update(kwargs)
+        return SimpleNamespace(parsed_output=parsed)
+
+    client = SimpleNamespace(messages=SimpleNamespace(parse=parse))
+    page = {"type": "document", "source": {}}
+    extract_structured(client, "m", "", ROW, attachment=page)  # type: ignore[arg-type]
+    content = captured["messages"][0]["content"]
+    assert content[0] == page
+    assert content[1]["type"] == "text"
