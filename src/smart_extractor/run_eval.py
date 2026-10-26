@@ -11,6 +11,8 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
+from pydantic import ValidationError
+
 from smart_extractor.dataset import ManifestRow, load_manifest
 from smart_extractor.metrics import (
     Document,
@@ -20,7 +22,7 @@ from smart_extractor.metrics import (
     count_outcomes,
     document_passed,
 )
-from smart_extractor.schemas import Invoice, PartialReceipt
+from smart_extractor.schemas import Invoice, PartialReceipt, Receipt
 
 Extractor = Callable[[Path, ManifestRow], Document | None]
 
@@ -31,13 +33,25 @@ def empty_extractor(doc: Path, row: ManifestRow) -> None:
 
 
 def load_label(data: Path, row: ManifestRow) -> Document:
-    model = Invoice if row.type == "invoice" else PartialReceipt
-    return model.model_validate_json((data / f"{row.id}.json").read_text(encoding="utf-8"))
+    """Complete receipt labels are scored strictly; incomplete ones load as PartialReceipt."""
+    raw = (data / f"{row.id}.json").read_text(encoding="utf-8")
+    if row.type == "invoice":
+        return Invoice.model_validate_json(raw)
+    try:
+        return Receipt.model_validate_json(raw)
+    except ValidationError:
+        return PartialReceipt.model_validate_json(raw)
+
+
+def _doc_path(data: Path, row: ManifestRow) -> Path:
+    """Synthetic documents are PDFs, public ones are page photos."""
+    png = data / f"{row.id}.png"
+    return png if png.exists() else data / f"{row.id}.pdf"
 
 
 def evaluate(data: Path, split: str, extractor: Extractor) -> list[Results]:
     rows = [r for r in load_manifest(data / "manifest.csv") if r.split == split]
-    return [compare_document(load_label(data, r), extractor(data / f"{r.id}.pdf", r)) for r in rows]
+    return [compare_document(load_label(data, r), extractor(_doc_path(data, r), r)) for r in rows]
 
 
 def render_report(name: str, split: str, all_results: list[Results]) -> str:

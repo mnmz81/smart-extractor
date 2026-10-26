@@ -87,3 +87,11 @@ def test_structured_sends_attachment_before_the_prompt() -> None:
     content = captured["messages"][0]["content"]
     assert content[0] == page
     assert content[1]["type"] == "text"
+
+
+def test_structured_returns_none_when_model_breaks_the_schema() -> None:
+    def parse(**_: Any) -> Any:
+        Invoice.model_validate({"total": "unreadable"})  # raises ValidationError like the SDK does
+
+    client = SimpleNamespace(messages=SimpleNamespace(parse=parse))
+    assert extract_structured(client, "m", "t", ROW) is None  # type: ignore[arg-type]

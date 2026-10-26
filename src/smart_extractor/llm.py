@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import anthropic
+from pydantic import ValidationError
 
 from smart_extractor.config import get_settings
 from smart_extractor.dataset import ManifestRow
@@ -57,7 +58,7 @@ def extract_structured(
     errors: list[str] | None = None,
     attachment: dict[str, Any] | None = None,
 ) -> Document | None:
-    """Constrain the reply to the Pydantic schema; None if the model refuses or is cut off.
+    """Constrain the reply to the Pydantic schema; None if it refuses, stops early or breaks it.
 
     With previous and errors, the prompt shows the earlier answer and the rules it broke.
     With attachment (see attachment_block), the model reads the page itself, not extracted text.
@@ -70,12 +71,15 @@ def extract_structured(
             f"It broke these rules:\n{broken}\nCheck the document again and fix the answer."
         )
     content: Any = [attachment, {"type": "text", "text": prompt}] if attachment else prompt
-    response = client.messages.parse(
-        model=model,
-        max_tokens=_MAX_TOKENS,
-        messages=[{"role": "user", "content": content}],
-        output_format=_model_for(row),
-    )
+    try:
+        response = client.messages.parse(
+            model=model,
+            max_tokens=_MAX_TOKENS,
+            messages=[{"role": "user", "content": content}],
+            output_format=_model_for(row),
+        )
+    except ValidationError:  # e.g. the model wrote 'unreadable' into a decimal field
+        return None
     parsed = response.parsed_output
     return parsed if isinstance(parsed, Invoice | Receipt) else None
 

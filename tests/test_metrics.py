@@ -79,6 +79,7 @@ def test_compare_document_classifies_fields_and_items() -> None:
     assert outcomes["vendor_name"] == "wrong"
     assert outcomes["customer_name"] == "missing"
     assert outcomes["due_date"] == "correct"  # absent in both
+    assert ("line_items.item", "correct") in compare_document(label, extracted)
     assert ("line_items.item", "missing") in compare_document(label, extracted)
     assert ("line_items.item", "hallucinated") in compare_document(label, extracted)
 
@@ -110,3 +111,36 @@ def test_aggregation_ignores_skipped() -> None:
     assert accuracy(Counter({"skipped": 2})) is None
     assert document_passed(docs[0])
     assert not document_passed(docs[1])
+
+
+def test_partial_label_skips_every_field_it_leaves_out() -> None:
+    label = PartialReceipt(currency="USD", line_items=[_item("Apple")], total=Decimal("1"))
+    extracted = Receipt(
+        currency="USD",
+        payment_method="Cash",  # not labeled, so not a hallucination
+        line_items=[LineItem(description="Apple", unit_price=Decimal("1"), total=Decimal("1"))],
+        tip=Decimal("2"),
+        total=Decimal("1"),
+        merchant_name="Shop",
+        purchased_at=datetime(2024, 3, 1),
+    )
+    outcomes = dict(compare_document(label, extracted))
+    assert outcomes["payment_method"] == "skipped"
+    assert outcomes["tip"] == "skipped"
+    assert outcomes["line_items.unit_price"] == "skipped"
+    assert outcomes["total"] == "correct"
+
+
+def test_match_line_items_pairs_close_descriptions() -> None:
+    pairs = match_line_items(
+        [_item("CHOCO CUS ARD PASTRY"), _item("[REG] BLACK SAKURA")],
+        [_item("CHOCO CUSTARD PASTRY"), _item("1 [REG] BLACK SAKURA"), _item("Water")],
+    )
+    assert all(w is None or g is not None for w, g in pairs if w is not None)
+    assert sum(w is not None and g is not None for w, g in pairs) == 2
+    assert [g.description for w, g in pairs if w is None and g is not None] == ["Water"]
+
+
+def test_match_line_items_keeps_different_items_apart() -> None:
+    pairs = match_line_items([_item("Apple")], [_item("Bread")])
+    assert (pairs[0][1] is None) and (pairs[1][0] is None)

@@ -1,6 +1,6 @@
 """Build the synthetic eval set: PDFs, label JSONs and manifest.csv.
 
-Usage: scripts/generate_dataset.sh [--out data/synthetic] [--n 40] [--seed 0]
+Usage: scripts/generate_dataset.sh [--out data/synthetic] [--n 40] [--seed 0] [--strength 1.0]
 """
 
 import argparse
@@ -21,7 +21,7 @@ from smart_extractor.synthetic import Lang, make_invoice, make_receipt
 _COLUMNS = ["id", "type", "lang", "source", "medium", "split", "private"]
 
 
-def generate_dataset(out: Path, n: int, seed: int) -> None:
+def generate_dataset(out: Path, n: int, seed: int, strength: float = 1.0) -> None:
     """Document i cycles type and medium, so every combination appears evenly."""
     out.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, str]] = []
@@ -47,7 +47,7 @@ def generate_dataset(out: Path, n: int, seed: int) -> None:
             with tempfile.TemporaryDirectory() as tmp:
                 png = Path(tmp) / "page.png"
                 html_to_png(html, png)
-                png_to_scanned_pdf(png, pdf, doc_seed)
+                png_to_scanned_pdf(png, pdf, doc_seed, strength)
         (out / f"{doc_id}.json").write_text(label.model_dump_json(indent=2), encoding="utf-8")
 
         rows.append(
@@ -73,8 +73,9 @@ def main() -> None:
     parser.add_argument("--out", type=Path, default=Path("data/synthetic"))
     parser.add_argument("--n", type=int, default=40)
     parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--strength", type=float, default=1.0, help="scan damage, 1.0 = mild")
     args = parser.parse_args()
-    generate_dataset(args.out, args.n, args.seed)
+    generate_dataset(args.out, args.n, args.seed, args.strength)
     print(f"wrote {args.n} documents to {args.out}")
 
 

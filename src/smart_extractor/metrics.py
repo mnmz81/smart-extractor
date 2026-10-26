@@ -4,6 +4,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable
 from datetime import date, datetime
 from decimal import Decimal
+from difflib import SequenceMatcher
 from typing import Literal
 
 from smart_extractor.normalize import normalize_text
@@ -12,6 +13,7 @@ from smart_extractor.schemas import Invoice, LineItem, PartialReceipt, Receipt
 Outcome = Literal["correct", "wrong", "missing", "hallucinated", "skipped"]
 
 _QUANTITY_TOLERANCE = Decimal("0.001")
+_MIN_SIMILARITY = 0.8  # description match ratio for pairing items that differ slightly
 
 
 def _outcome[T](label: T | None, extracted: T | None, equal: Callable[[T, T], bool]) -> Outcome:
@@ -44,18 +46,34 @@ def compare_date(label: date | None, extracted: date | None) -> Outcome:
     return _outcome(label, extracted, lambda a, b: _day(a) == _day(b))
 
 
+def _similarity(a: LineItem, b: LineItem) -> float:
+    return SequenceMatcher(
+        None, normalize_text(a.description), normalize_text(b.description)
+    ).ratio()
+
+
 def match_line_items(
     labels: list[LineItem], extracted: list[LineItem]
 ) -> list[tuple[LineItem | None, LineItem | None]]:
-    """Pair items by normalized description; leftovers pair with None (missing / hallucinated)."""
-    # shortcut: exact description match only, so a typo becomes missing + hallucinated;
-    # add fuzzy matching if the eval shows it
+    """Pair items by description: exact (normalized) first, then close matches.
+
+    Leftovers pair with None (missing / hallucinated).
+    """
     pool = list(extracted)
-    pairs: list[tuple[LineItem | None, LineItem | None]] = []
-    for label in labels:
+    partners: list[LineItem | None] = [None] * len(labels)
+    for n, label in enumerate(labels):
         key = normalize_text(label.description)
         hit = next((i for i, e in enumerate(pool) if normalize_text(e.description) == key), None)
-        pairs.append((label, pool.pop(hit) if hit is not None else None))
+        if hit is not None:
+            partners[n] = pool.pop(hit)
+    for n, label in enumerate(labels):  # a typo or a stray "1 " prefix is not two errors
+        if partners[n] is not None:
+            continue
+        best = max(pool, key=lambda e: _similarity(label, e), default=None)
+        if best is not None and _similarity(label, best) >= _MIN_SIMILARITY:
+            pool.remove(best)
+            partners[n] = best
+    pairs: list[tuple[LineItem | None, LineItem | None]] = list(zip(labels, partners, strict=True))
     pairs.extend((None, leftover) for leftover in pool)
     return pairs
 
@@ -72,13 +90,11 @@ _TEXT_FIELDS = {
 }
 _MONEY_FIELDS = {"subtotal", "tax", "tip", "total"}
 _DATE_FIELDS = {"issue_date", "due_date", "purchased_at"}
-# A PartialReceipt label is None here when the source is unreadable: nothing to score against.
-_UNREADABLE_IN_PARTIAL = {"merchant_name", "purchased_at"}
 
 
 def _compare_field(name: str, label: Document, extracted: Document | None) -> Outcome:
     a, b = getattr(label, name), getattr(extracted, name, None)
-    if isinstance(label, PartialReceipt) and name in _UNREADABLE_IN_PARTIAL and a is None:
+    if isinstance(label, PartialReceipt) and a is None:  # not labeled: nothing to score against
         return "skipped"
     if name in _TEXT_FIELDS:
         return compare_text(a, b)
@@ -95,10 +111,14 @@ def _compare_line_items(label: Document, extracted: Document | None) -> list[tup
         elif want is None:
             results.append(("line_items.item", "hallucinated"))
         else:
+            results.append(("line_items.item", "correct"))
             results.append(("line_items.quantity", compare_quantity(want.quantity, got.quantity)))
-            results.append(
-                ("line_items.unit_price", compare_money(want.unit_price, got.unit_price))
+            unit_price = (
+                "skipped"
+                if isinstance(label, PartialReceipt) and want.unit_price is None
+                else compare_money(want.unit_price, got.unit_price)
             )
+            results.append(("line_items.unit_price", unit_price))
             results.append(("line_items.total", compare_money(want.total, got.total)))
     return results
 

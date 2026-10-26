@@ -16,7 +16,9 @@ def extract_text(pdf_path: Path) -> str:
 
 
 def route(pdf_path: Path) -> Route:
-    """Digital PDFs have a text layer on every page; scans have little or none."""
+    """Digital PDFs have a text layer on every page; scans and image files have little or none."""
+    if pdf_path.suffix != ".pdf":
+        return "vision"
     with pdfplumber.open(pdf_path) as pdf:
         counts = [len(page.chars) for page in pdf.pages]
     return "text" if counts and min(counts) >= _MIN_CHARS_PER_PAGE else "vision"

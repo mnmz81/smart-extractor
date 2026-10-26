@@ -30,7 +30,7 @@ class Receipt(_ReceiptBody):
 class PartialReceipt(_ReceiptBody):
     """Label for a document whose merchant or date is unreadable (e.g. blurred in CORD).
 
-    Metrics skip a field that is None here, so it is neither rewarded nor penalized.
+    Metrics skip every field that is None here (not labeled): neither rewarded nor penalized.
     """
 
     merchant_name: str | None = None
