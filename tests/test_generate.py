@@ -10,7 +10,7 @@ def test_generate_dataset_is_consistent(tmp_path: Path) -> None:
     rows = load_manifest(tmp_path / "manifest.csv")
     assert len(rows) == 10
     assert {r.medium for r in rows} == {"digital", "scanned"}
-    assert {r.lang for r in rows} == {"en", "he"}
+    assert {r.lang for r in rows} == {"en"}
     assert {r.type for r in rows} == {"invoice", "receipt"}
     assert sum(r.split == "test" for r in rows) == 2
     for r in rows:

@@ -12,7 +12,7 @@ class ManifestRow(BaseModel):
 
     id: str
     type: Literal["invoice", "receipt"]
-    lang: Literal["he", "en"]
+    lang: Literal["en"]
     source: Literal["synthetic", "public", "private"]
     medium: Literal["digital", "scanned"]
     split: Literal["dev", "test"]

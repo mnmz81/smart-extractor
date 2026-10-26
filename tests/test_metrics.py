@@ -1,12 +1,17 @@
+from collections import Counter
 from datetime import date, datetime
 from decimal import Decimal
 
 from smart_extractor.metrics import (
+    Outcome,
+    accuracy,
     compare_date,
     compare_document,
     compare_money,
     compare_quantity,
     compare_text,
+    count_outcomes,
+    document_passed,
     match_line_items,
 )
 from smart_extractor.schemas import Invoice, LineItem, PartialReceipt, Receipt
@@ -92,3 +97,16 @@ def test_partial_receipt_skips_unreadable_fields() -> None:
     assert outcomes["merchant_name"] == "skipped"
     assert outcomes["purchased_at"] == "skipped"
     assert outcomes["total"] == "correct"
+
+
+def test_aggregation_ignores_skipped() -> None:
+    docs: list[list[tuple[str, Outcome]]] = [
+        [("total", "correct"), ("merchant_name", "skipped")],
+        [("total", "wrong"), ("merchant_name", "correct")],
+    ]
+    counts = count_outcomes(docs)
+    assert accuracy(counts["total"]) == 0.5
+    assert accuracy(counts["merchant_name"]) == 1.0  # the skipped one is not scored
+    assert accuracy(Counter({"skipped": 2})) is None
+    assert document_passed(docs[0])
+    assert not document_passed(docs[1])

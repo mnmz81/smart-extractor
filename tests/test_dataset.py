@@ -37,10 +37,10 @@ def test_private_source_must_be_flagged() -> None:
 
 def test_load_manifest_parses_csv_bool(tmp_path: Path) -> None:
     f = tmp_path / "manifest.csv"
-    f.write_text(HEADER + "inv-001,invoice,he,private,scanned,test,true\n", encoding="utf-8")
+    f.write_text(HEADER + "inv-001,invoice,en,private,scanned,test,true\n", encoding="utf-8")
     rows = load_manifest(f)
     assert rows[0].private is True
-    assert rows[0].lang == "he"
+    assert rows[0].lang == "en"
 
 
 def test_load_manifest_rejects_duplicate_ids(tmp_path: Path) -> None:

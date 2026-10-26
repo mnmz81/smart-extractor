@@ -1,6 +1,7 @@
 """Compare extracted values to labels and classify each field."""
 
-from collections.abc import Callable
+from collections import Counter
+from collections.abc import Callable, Iterable
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
@@ -75,7 +76,7 @@ _DATE_FIELDS = {"issue_date", "due_date", "purchased_at"}
 _UNREADABLE_IN_PARTIAL = {"merchant_name", "purchased_at"}
 
 
-def _compare_field(name: str, label: Document, extracted: Document) -> Outcome:
+def _compare_field(name: str, label: Document, extracted: Document | None) -> Outcome:
     a, b = getattr(label, name), getattr(extracted, name, None)
     if isinstance(label, PartialReceipt) and name in _UNREADABLE_IN_PARTIAL and a is None:
         return "skipped"
@@ -86,9 +87,9 @@ def _compare_field(name: str, label: Document, extracted: Document) -> Outcome:
     return compare_date(a, b)
 
 
-def _compare_line_items(label: Document, extracted: Document) -> list[tuple[str, Outcome]]:
+def _compare_line_items(label: Document, extracted: Document | None) -> list[tuple[str, Outcome]]:
     results: list[tuple[str, Outcome]] = []
-    for want, got in match_line_items(label.line_items, extracted.line_items):
+    for want, got in match_line_items(label.line_items, extracted.line_items if extracted else []):
         if got is None:
             results.append(("line_items.item", "missing"))
         elif want is None:
@@ -102,8 +103,34 @@ def _compare_line_items(label: Document, extracted: Document) -> list[tuple[str,
     return results
 
 
-def compare_document(label: Document, extracted: Document) -> list[tuple[str, Outcome]]:
-    """One (field, outcome) per scored field; line items add one entry per matched sub-field."""
+def compare_document(label: Document, extracted: Document | None) -> list[tuple[str, Outcome]]:
+    """One (field, outcome) per scored field, line items add one per sub-field.
+
+    extracted=None means the extractor produced nothing: every labeled field is missing.
+    """
     names = _TEXT_FIELDS | _MONEY_FIELDS | _DATE_FIELDS
     results = [(n, _compare_field(n, label, extracted)) for n in sorted(names) if hasattr(label, n)]
     return results + _compare_line_items(label, extracted)
+
+
+Results = list[tuple[str, Outcome]]
+
+
+def count_outcomes(documents: Iterable[Results]) -> dict[str, Counter[Outcome]]:
+    """Per field, how many times each outcome occurred across all documents."""
+    counts: dict[str, Counter[Outcome]] = {}
+    for results in documents:
+        for field, outcome in results:
+            counts.setdefault(field, Counter())[outcome] += 1
+    return counts
+
+
+def accuracy(counts: Counter[Outcome]) -> float | None:
+    """Share of scored comparisons that are correct, skipped ones excluded; None if none scored."""
+    scored = counts.total() - counts["skipped"]
+    return counts["correct"] / scored if scored else None
+
+
+def document_passed(results: Results) -> bool:
+    """A document passes only if every scored field is correct."""
+    return all(outcome in ("correct", "skipped") for _, outcome in results)

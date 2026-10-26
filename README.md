@@ -1,13 +1,13 @@
 # Smart Extractor
 
-Extract schema-validated JSON from invoices and receipts (English and Hebrew) using LLMs.
+Extract schema-validated JSON from invoices and receipts using LLMs.
 
 ## Status
 
 The evaluation foundation is in place; the extractors are next.
 
 - Pydantic schemas: `Invoice`, `Receipt`, `LineItem`
-- Eval set: a seeded synthetic generator (digital and degraded "scanned" PDFs, en/he, RTL),
+- Eval set: a seeded synthetic generator (digital and degraded "scanned" PDFs, English),
   public receipts from CORD, and a private set of real documents that never leaves the machine
 - Manifest with a fixed dev/test split (`data/*/manifest.csv`)
 - Planned: metrics, baseline, Claude and Gemini extractors, retry on validation errors,

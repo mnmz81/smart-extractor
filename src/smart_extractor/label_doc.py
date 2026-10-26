@@ -48,7 +48,7 @@ def main() -> None:
     parser.add_argument("doc_id")
     parser.add_argument("--dir", type=Path, default=Path("data/public"))
     parser.add_argument("--source", choices=["public", "private"], default="public")
-    parser.add_argument("--lang", choices=["he", "en"], default="en")
+    parser.add_argument("--lang", choices=["en"], default="en")
     args = parser.parse_args()
     label_doc(args.doc_id, args.dir, args.source, args.lang)
 

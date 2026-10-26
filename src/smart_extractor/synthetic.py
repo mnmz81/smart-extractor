@@ -8,10 +8,10 @@ from faker import Faker
 
 from smart_extractor.schemas import Invoice, LineItem, Receipt
 
-Lang = Literal["he", "en"]
-_LOCALES: dict[Lang, str] = {"en": "en_US", "he": "he_IL"}
-_CURRENCY: dict[Lang, str] = {"en": "USD", "he": "ILS"}
-_TAX_RATE = {"en": Decimal("0.08"), "he": Decimal("0.18")}
+Lang = Literal["en"]
+_LOCALES: dict[Lang, str] = {"en": "en_US"}
+_CURRENCY: dict[Lang, str] = {"en": "USD"}
+_TAX_RATE = {"en": Decimal("0.08")}
 _CENT = Decimal("0.01")
 
 
@@ -19,14 +19,14 @@ def _money(value: Decimal) -> Decimal:
     return value.quantize(_CENT, rounding=ROUND_HALF_UP)
 
 
-def _make_items(fake: Faker, lang: Lang) -> list[LineItem]:
+def _make_items(fake: Faker) -> list[LineItem]:
     items: list[LineItem] = []
     for _ in range(fake.random_int(min=1, max=6)):
         quantity = Decimal(fake.random_int(min=1, max=10))
         unit_price = _money(Decimal(fake.random_int(min=100, max=50000)) / 100)
         items.append(
             LineItem(
-                description=fake.catch_phrase() if lang == "en" else fake.word(),
+                description=fake.catch_phrase(),
                 quantity=quantity,
                 unit_price=unit_price,
                 total=_money(quantity * unit_price),
@@ -44,7 +44,7 @@ def _faker(seed: int, lang: Lang) -> Faker:
 def make_invoice(seed: int, lang: Lang = "en") -> Invoice:
     """Same seed and lang always give the same invoice."""
     fake = _faker(seed, lang)
-    items = _make_items(fake, lang)
+    items = _make_items(fake)
     subtotal = sum((i.total for i in items), Decimal("0"))
     tax = _money(subtotal * _TAX_RATE[lang])
     issue_date = fake.date_between(start_date="-1y", end_date="today")
@@ -66,7 +66,7 @@ def make_invoice(seed: int, lang: Lang = "en") -> Invoice:
 def make_receipt(seed: int, lang: Lang = "en") -> Receipt:
     """Same seed and lang always give the same receipt."""
     fake = _faker(seed, lang)
-    items = _make_items(fake, lang)
+    items = _make_items(fake)
     subtotal = sum((i.total for i in items), Decimal("0"))
     tax = _money(subtotal * _TAX_RATE[lang])
     tip = _money(subtotal * Decimal("0.10")) if fake.boolean() else None

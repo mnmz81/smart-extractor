@@ -19,16 +19,15 @@ from smart_extractor.schemas import Invoice, Receipt
 from smart_extractor.synthetic import Lang, make_invoice, make_receipt
 
 _COLUMNS = ["id", "type", "lang", "source", "medium", "split", "private"]
-_LANGS: tuple[Lang, ...] = ("en", "he")
 
 
 def generate_dataset(out: Path, n: int, seed: int) -> None:
-    """Document i cycles type, language and medium, so every combination appears evenly."""
+    """Document i cycles type and medium, so every combination appears evenly."""
     out.mkdir(parents=True, exist_ok=True)
     rows: list[dict[str, str]] = []
     for i in range(n):
         doc_type = "invoice" if i % 2 == 0 else "receipt"
-        lang = _LANGS[(i // 2) % 2]
+        lang: Lang = "en"
         medium = "digital" if (i // 4) % 2 == 0 else "scanned"
         doc_id = f"{doc_type[:3]}-{i:04d}"
         doc_seed = seed * 100_000 + i

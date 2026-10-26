@@ -2,12 +2,11 @@
 
 import unicodedata
 
-# Hebrew geresh/gershayim and typographic quotes -> plain ASCII, so ״ and " compare equal.
-_QUOTES = str.maketrans({"׳": "'", "״": '"', "‘": "'", "’": "'", "“": '"', "”": '"'})
+# Typographic quotes -> plain ASCII, so curly and straight quotes compare equal.
+_QUOTES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
 
 
 def normalize_text(text: str) -> str:
-    """Trim, collapse whitespace, ignore case, drop Hebrew niqqud, unify quote marks."""
+    """Trim, collapse whitespace, ignore case, unify quote marks."""
     text = unicodedata.normalize("NFC", text).translate(_QUOTES)
-    text = "".join(c for c in text if unicodedata.category(c) != "Mn")  # niqqud are Mn marks
     return " ".join(text.casefold().split())
