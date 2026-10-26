@@ -10,10 +10,11 @@ from smart_extractor.config import get_settings
 from smart_extractor.dataset import ManifestRow
 from smart_extractor.ingest import extract_text, route
 from smart_extractor.metrics import Document
+from smart_extractor.retry import extract_with_retry
 from smart_extractor.run_eval import Extractor
 from smart_extractor.schemas import Invoice, Receipt
 
-Mode = Literal["naive", "structured"]
+Mode = Literal["naive", "structured", "validated"]
 
 DEFAULT_MODEL = "claude-haiku-5-5"
 _MAX_TOKENS = 4096
@@ -39,13 +40,28 @@ def extract_naive(
 
 
 def extract_structured(
-    client: anthropic.Anthropic, model: str, text: str, row: ManifestRow
+    client: anthropic.Anthropic,
+    model: str,
+    text: str,
+    row: ManifestRow,
+    previous: Document | None = None,
+    errors: list[str] | None = None,
 ) -> Document | None:
-    """Constrain the reply to the Pydantic schema; None if the model refuses or is cut off."""
+    """Constrain the reply to the Pydantic schema; None if the model refuses or is cut off.
+
+    With previous and errors, the prompt shows the earlier answer and the rules it broke.
+    """
+    prompt = f"Extract the {row.type} data.\n\n{text}"
+    if previous is not None and errors:
+        broken = "\n".join(f"- {e}" for e in errors)
+        prompt += (
+            f"\n\nYour previous answer was:\n{previous.model_dump_json()}\n"
+            f"It broke these rules:\n{broken}\nCheck the document again and fix the answer."
+        )
     response = client.messages.parse(
         model=model,
         max_tokens=_MAX_TOKENS,
-        messages=[{"role": "user", "content": f"Extract the {row.type} data.\n\n{text}"}],
+        messages=[{"role": "user", "content": prompt}],
         output_format=_model_for(row),
     )
     parsed = response.parsed_output
@@ -58,11 +74,17 @@ def make_extractor(mode: Mode, model: str = DEFAULT_MODEL) -> Extractor:
     if key is None:
         raise SystemExit("ANTHROPIC_API_KEY is not set: add it to .env")
     client = anthropic.Anthropic(api_key=key.get_secret_value())
-    extract = extract_naive if mode == "naive" else extract_structured
 
     def extractor(doc: Path, row: ManifestRow) -> Document | None:
         if route(doc) == "vision":
             return None  # shortcut: no vision path yet, scans score as missing until step 10
-        return extract(client, model, extract_text(doc), row)
+        text = extract_text(doc)
+        if mode == "naive":
+            return extract_naive(client, model, text, row)
+        if mode == "structured":
+            return extract_structured(client, model, text, row)
+        return extract_with_retry(
+            lambda previous, errors: extract_structured(client, model, text, row, previous, errors)
+        ).document
 
     return extractor
