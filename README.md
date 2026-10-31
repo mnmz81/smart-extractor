@@ -38,3 +38,11 @@ scripts/uv.sh run pytest                        # tests
 - `data/public/`: downloaded from [CORD v2](https://huggingface.co/datasets/naver-clova-ix/cord-v2)
   (CC BY 4.0, see [NOTICE](NOTICE)). Not stored in the repository.
 - `data/private/`: real documents, gitignored. Only aggregate scores are ever published.
+
+## Contributing
+
+Enable the secret-blocking pre-commit hook once per clone:
+
+```bash
+git config core.hooksPath .githooks
+```
