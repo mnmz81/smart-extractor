@@ -8,6 +8,7 @@ naive, structured, validated and vision call a paid LLM API once per digital doc
 """
 
 import argparse
+import time
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
@@ -63,6 +64,7 @@ def render_report(
     model: str | None = None,
     usage: Usage | None = None,
     stats: RetryStats | None = None,
+    seconds: float | None = None,
 ) -> str:
     counts = count_outcomes(all_results)
     passed = sum(document_passed(r) for r in all_results)
@@ -83,6 +85,8 @@ def render_report(
             f"Retries: {stats.retries} extra calls, {stats.retried} of {stats.documents} documents "
             f"retried, {stats.unresolved} still broken at the end"
         )
+    if seconds is not None and all_results:
+        lines.append(f"Time: {seconds:.1f}s · {seconds / len(all_results):.2f}s per document")
     lines += [
         "",
         "| field | accuracy | correct | wrong | missing | hallucinated | skipped |",
@@ -123,8 +127,10 @@ def main() -> None:
         usage = provider.usage
         extractor = make_extractor(args.extractor, model, provider, stats)
     name = f"{args.extractor}-{datetime.now():%Y%m%d-%H%M%S}"
+    start = time.perf_counter()
     results = evaluate(args.data, args.split, extractor)
-    report = render_report(name, args.split, results, model, usage, stats)
+    seconds = time.perf_counter() - start
+    report = render_report(name, args.split, results, model, usage, stats, seconds)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / f"{name}.md").write_text(report, encoding="utf-8")
     print(report)
