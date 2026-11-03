@@ -52,3 +52,10 @@ def test_report_shows_cost_and_retry_stats(tmp_path: Path) -> None:
     assert "tokens in/out: 10000/2000" in report
     assert "cost: $0.0020" in report
     assert "1 of 2 documents retried" in report
+
+
+def test_report_shows_time_per_document(tmp_path: Path) -> None:
+    _write_dataset(tmp_path)
+    results = evaluate(tmp_path, "dev", empty_extractor)
+    report = render_report("t", "dev", results, seconds=3.0)
+    assert "Time: 3.0s · 3.00s per document" in report

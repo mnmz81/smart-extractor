@@ -10,7 +10,10 @@ from pathlib import Path
 root = Path(sys.argv[1] if len(sys.argv) > 1 else "reports/compare")
 rows = []
 for label_dir in sorted(p for p in root.iterdir() if p.is_dir()):
-    row = {"model": label_dir.name, "docs": 0, "ok": 0, "cost": 0.0, "cells": [0, 0], "retried": 0}
+    row = {
+        "model": label_dir.name, "docs": 0, "ok": 0, "cost": 0.0, "cells": [0, 0],
+        "retried": 0, "seconds": 0.0, "timed_docs": 0,
+    }
     for report in label_dir.glob("*/*.md"):
         t = report.read_text()
         m = re.search(r"documents: (\d+) · fully correct: (\d+)", t)
@@ -19,6 +22,9 @@ for label_dir in sorted(p for p in root.iterdir() if p.is_dir()):
         row["cost"] += float(re.search(r"cost: \$([\d.]+)", t)[1])
         if r := re.search(r"(\d+) of \d+ documents retried", t):
             row["retried"] += int(r[1])
+        if s := re.search(r"Time: ([\d.]+)s", t):  # older reports have no timing
+            row["seconds"] += float(s[1])
+            row["timed_docs"] += int(m[1])
         for f in re.findall(
             r"^\| [\w.]+ \| [\d.]+% \| (\d+) \| (\d+) \| (\d+) \| (\d+) \|", t, re.M
         ):
@@ -28,15 +34,16 @@ for label_dir in sorted(p for p in root.iterdir() if p.is_dir()):
     rows.append(row)
 
 lines = [
-    "| model | docs fully correct | field accuracy | cost | cost / doc |",
-    "|---|---|---|---|---|",
+    "| model | docs fully correct | field accuracy | cost | cost / doc | retry rate | s / doc |",
+    "|---|---|---|---|---|---|---|",
 ]
 for r in rows:
     ok, tot = r["ok"], r["docs"]
     acc = r["cells"][0] / r["cells"][1]
+    latency = f"{r['seconds'] / r['timed_docs']:.2f}" if r["timed_docs"] else "n/a"
     lines.append(
         f"| {r['model']} | {ok}/{tot} ({ok / tot:.0%}) | {acc:.1%} | ${r['cost']:.3f} "
-        f"| ${r['cost'] / tot:.4f} |"
+        f"| ${r['cost'] / tot:.4f} | {r['retried'] / tot:.0%} | {latency} |"
     )
 (root / "summary.md").write_text("\n".join(lines) + "\n")
 
