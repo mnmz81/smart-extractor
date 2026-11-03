@@ -14,7 +14,7 @@ fi
 
 # Telegram bot token, 64-hex API key (SerpApi style), private key block, or key/secret/token/password = "<long value>"
 pattern='[0-9]{6,12}:[A-Za-z0-9_-]{30,}|(^|[^a-f0-9])[a-f0-9]{64}([^a-f0-9]|$)|-----BEGIN [A-Z ]*PRIVATE KEY-----|(api[_-]?key|secret|token|password)["'"'"' ]*[:=] *["'"'"'][^"'"'"' ]{12,}'
-hits=$(git diff --cached -U0 --diff-filter=ACMR -- . ':(exclude)*package-lock.json' |
+hits=$(git diff --cached -U0 --diff-filter=ACMR -- . ':(exclude)*package-lock.json' ':(exclude)uv.lock' |
   awk '/^\+\+\+ /{f=substr($0,7)} /^\+[^+]/{print f": "substr($0,2)}' |
   grep -iE "$pattern" || true)
 if [ -n "$hits" ]; then
