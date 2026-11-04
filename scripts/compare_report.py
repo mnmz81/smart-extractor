@@ -11,8 +11,14 @@ root = Path(sys.argv[1] if len(sys.argv) > 1 else "reports/compare")
 rows = []
 for label_dir in sorted(p for p in root.iterdir() if p.is_dir()):
     row = {
-        "model": label_dir.name, "docs": 0, "ok": 0, "cost": 0.0, "cells": [0, 0],
-        "retried": 0, "seconds": 0.0, "timed_docs": 0,
+        "model": label_dir.name,
+        "docs": 0,
+        "ok": 0,
+        "cost": 0.0,
+        "cells": [0, 0],
+        "retried": 0,
+        "seconds": 0.0,
+        "timed_docs": 0,
     }
     for report in label_dir.glob("*/*.md"):
         t = report.read_text()

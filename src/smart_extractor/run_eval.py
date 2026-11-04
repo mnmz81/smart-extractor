@@ -2,12 +2,13 @@
 
 Usage: scripts/run_eval.sh [--data data/synthetic] [--split dev] [--out reports]
        [--extractor baseline|naive|structured|validated|vision]
-       [--provider claude|gemini] [--model ID]
+       [--provider claude|gemini] [--model ID] [--concurrency 4]
 
 naive, structured, validated and vision call a paid LLM API once per digital document.
 """
 
 import argparse
+import asyncio
 import time
 from collections.abc import Callable
 from datetime import datetime
@@ -52,9 +53,24 @@ def _doc_path(data: Path, row: ManifestRow) -> Path:
     return png if png.exists() else data / f"{row.id}.pdf"
 
 
-def evaluate(data: Path, split: str, extractor: Extractor) -> list[Results]:
+async def _evaluate(
+    data: Path, split: str, extractor: Extractor, concurrency: int
+) -> list[Results]:
     rows = [r for r in load_manifest(data / "manifest.csv") if r.split == split]
-    return [compare_document(load_label(data, r), extractor(_doc_path(data, r), r)) for r in rows]
+    gate = asyncio.Semaphore(concurrency)  # at most this many documents in flight
+
+    async def one(row: ManifestRow) -> Results:
+        async with gate:
+            # shortcut: to_thread's default pool has min(32, cpus + 4) threads, so keep
+            # concurrency below that; upgrade to a sized executor if you need more
+            found = await asyncio.to_thread(extractor, _doc_path(data, row), row)
+        return compare_document(load_label(data, row), found)
+
+    return list(await asyncio.gather(*(one(r) for r in rows)))  # gather keeps manifest order
+
+
+def evaluate(data: Path, split: str, extractor: Extractor, concurrency: int = 1) -> list[Results]:
+    return asyncio.run(_evaluate(data, split, extractor, concurrency))
 
 
 def render_report(
@@ -115,6 +131,9 @@ def main() -> None:
     )
     parser.add_argument("--provider", choices=["claude", "gemini"], default="claude")
     parser.add_argument("--model", help="default: haiku for claude, gemini-3.8-flash for gemini")
+    parser.add_argument(
+        "--concurrency", type=int, default=4, help="documents in flight at once (1 = one by one)"
+    )
     args = parser.parse_args()
     model = args.model or _DEFAULT_MODELS[args.provider]
     extractor: Extractor = empty_extractor
@@ -128,7 +147,7 @@ def main() -> None:
         extractor = make_extractor(args.extractor, model, provider, stats)
     name = f"{args.extractor}-{datetime.now():%Y%m%d-%H%M%S}"
     start = time.perf_counter()
-    results = evaluate(args.data, args.split, extractor)
+    results = evaluate(args.data, args.split, extractor, args.concurrency)
     seconds = time.perf_counter() - start
     report = render_report(name, args.split, results, model, usage, stats, seconds)
     args.out.mkdir(parents=True, exist_ok=True)

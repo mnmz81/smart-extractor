@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from smart_extractor.metrics import Document
-from smart_extractor.providers import SchemaFailure
+from smart_extractor.providers import SchemaFailure, count_lock
 from smart_extractor.rules import check_document
 
 Attempt = Callable[[Document | None, list[str]], Document | None]
@@ -50,7 +50,8 @@ class RetryStats:
     unresolved: int = 0  # documents still breaking a rule or the schema at the end
 
     def add(self, result: RetryResult) -> None:
-        self.documents += 1
-        self.retried += result.retries > 0
-        self.retries += result.retries
-        self.unresolved += bool(result.errors)
+        with count_lock:  # documents run on several threads at once
+            self.documents += 1
+            self.retried += result.retries > 0
+            self.retries += result.retries
+            self.unresolved += bool(result.errors)
