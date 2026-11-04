@@ -1,6 +1,7 @@
 """LLM providers behind one small interface, so extractors do not care which model answers."""
 
 import base64
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol
@@ -12,6 +13,8 @@ from pydantic import BaseModel, ValidationError
 
 _MAX_TOKENS = 4096
 _GEMINI_MAX_TOKENS = 8192  # thinking tokens count against the limit
+
+count_lock = threading.Lock()  # guards the run-wide counters when documents run in parallel
 
 
 @dataclass(frozen=True)
@@ -66,9 +69,10 @@ class AnthropicProvider:
         self.usage = Usage()
 
     def _count(self, usage: Any) -> None:
-        self.usage.calls += 1
-        self.usage.input_tokens += usage.input_tokens
-        self.usage.output_tokens += usage.output_tokens
+        with count_lock:
+            self.usage.calls += 1
+            self.usage.input_tokens += usage.input_tokens
+            self.usage.output_tokens += usage.output_tokens
 
     def complete(self, model: str, prompt: str) -> str:
         response = self.client.messages.create(
@@ -113,13 +117,14 @@ class GeminiProvider:
 
     def _count(self, response: Any) -> None:
         meta = response.usage_metadata
-        self.usage.calls += 1
-        if meta is not None:
-            self.usage.input_tokens += meta.prompt_token_count or 0
-            # thinking tokens are billed as output
-            self.usage.output_tokens += (meta.candidates_token_count or 0) + (
-                meta.thoughts_token_count or 0
-            )
+        with count_lock:
+            self.usage.calls += 1
+            if meta is not None:
+                self.usage.input_tokens += meta.prompt_token_count or 0
+                # thinking tokens are billed as output
+                self.usage.output_tokens += (meta.candidates_token_count or 0) + (
+                    meta.thoughts_token_count or 0
+                )
 
     def complete(self, model: str, prompt: str) -> str:
         config = types.GenerateContentConfig(max_output_tokens=_GEMINI_MAX_TOKENS)

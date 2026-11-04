@@ -1,7 +1,10 @@
+import threading
+import time
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
 
+from smart_extractor.dataset import ManifestRow
 from smart_extractor.run_eval import empty_extractor, evaluate, render_report
 from smart_extractor.schemas import Invoice, LineItem
 
@@ -32,6 +35,36 @@ def test_baseline_scores_zero_on_dev_split(tmp_path: Path) -> None:
     outcomes = dict(results[0])
     assert outcomes["vendor_name"] == "missing"
     assert outcomes["due_date"] == "correct"  # absent in label and extraction
+
+
+def test_concurrency_caps_documents_in_flight(tmp_path: Path) -> None:
+    ids = [f"inv-{i}" for i in range(6)]
+    rows = "".join(f"{i},invoice,en,synthetic,digital,dev,false\n" for i in ids)
+    (tmp_path / "manifest.csv").write_text(
+        "id,type,lang,source,medium,split,private\n" + rows, encoding="utf-8"
+    )
+    label = Invoice(
+        invoice_number="INV-1",
+        issue_date=date(2024, 3, 1),
+        vendor_name="Acme",
+        currency="USD",
+        line_items=[LineItem(description="Apple", total=Decimal("1"))],
+        total=Decimal("1"),
+    )
+    for i in ids:
+        (tmp_path / f"{i}.json").write_text(label.model_dump_json(), encoding="utf-8")
+    lock, running, peak = threading.Lock(), [0], [0]
+
+    def slow(doc: Path, row: ManifestRow) -> None:
+        with lock:
+            running[0] += 1
+            peak[0] = max(peak[0], running[0])
+        time.sleep(0.1)
+        with lock:
+            running[0] -= 1
+
+    assert len(evaluate(tmp_path, "dev", slow, concurrency=3)) == 6
+    assert peak[0] == 3
 
 
 def test_report_lists_fields(tmp_path: Path) -> None:
