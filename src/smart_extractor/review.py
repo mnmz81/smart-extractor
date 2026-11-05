@@ -41,6 +41,13 @@ def pending(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def get(conn: sqlite3.Connection, review_id: int) -> sqlite3.Row | None:
+    row: sqlite3.Row | None = conn.execute(
+        "SELECT * FROM review WHERE id = ?", (review_id,)
+    ).fetchone()
+    return row
+
+
 def resolve(conn: sqlite3.Connection, review_id: int, corrected: Document | None = None) -> None:
     """Approve the extraction as it is, or store the human's corrected version."""
     status = "approved" if corrected is None else "corrected"
