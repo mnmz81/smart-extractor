@@ -1,0 +1,19 @@
+# Secrets and private documents never enter the build context
+.env
+.env.*
+!.env.example
+data/
+reports/
+
+# Not needed in the image
+.git
+.github
+.venv
+tests
+scripts
+PLAN.md
+**/__pycache__
+.mypy_cache
+.pytest_cache
+.ruff_cache
+.DS_Store
