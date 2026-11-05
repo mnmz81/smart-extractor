@@ -2,8 +2,14 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from smart_extractor.confidence import Signals
 from smart_extractor.dataset import ManifestRow
-from smart_extractor.llm import extract_naive, extract_structured, parse_structured
+from smart_extractor.llm import (
+    extract_naive,
+    extract_structured,
+    make_extractor,
+    parse_structured,
+)
 from smart_extractor.providers import Attachment, SchemaFailure, Usage
 from smart_extractor.schemas import Invoice
 
@@ -86,3 +92,15 @@ def test_attachment_is_passed_to_the_provider() -> None:
     page = Attachment("application/pdf", b"%PDF")
     extract_structured(provider, "m", "", ROW, page)
     assert provider.attachments == [page]
+
+
+def test_validated_mode_records_signals_per_document(monkeypatch: Any, tmp_path: Any) -> None:
+    monkeypatch.setattr("smart_extractor.llm.route", lambda doc: "text")
+    monkeypatch.setattr("smart_extractor.llm.extract_text", lambda doc: "text")
+    parsed = Invoice.model_validate_json(VALID)
+    signals: dict[str, Signals] = {}
+    extractor = make_extractor("validated", "m", FakeProvider(parsed=parsed), signals=signals)
+    assert extractor(tmp_path / "inv-1.pdf", ROW) == parsed
+    assert signals["inv-1"].retries == 0
+    assert signals["inv-1"].vision is False
+    assert signals["inv-1"].errors == 0

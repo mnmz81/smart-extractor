@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from typing import Literal
 
+from smart_extractor.confidence import Signals, missing_share
 from smart_extractor.dataset import ManifestRow
 from smart_extractor.ingest import extract_text, route
 from smart_extractor.metrics import Document
@@ -75,9 +76,16 @@ def extract_structured(
 
 
 def make_extractor(
-    mode: Mode, model: str, provider: Provider, stats: RetryStats | None = None
+    mode: Mode,
+    model: str,
+    provider: Provider,
+    stats: RetryStats | None = None,
+    signals: dict[str, Signals] | None = None,
 ) -> Extractor:
-    """Build an Extractor for run_eval. Scans go to the model as images (naive stays text-only)."""
+    """Build an Extractor for run_eval. Scans go to the model as images (naive stays text-only).
+
+    With signals, the validated mode records confidence signals per document id.
+    """
 
     def extractor(doc: Path, row: ManifestRow) -> Document | None:
         use_vision = mode == "vision" or route(doc) == "vision"
@@ -96,6 +104,9 @@ def make_extractor(
         result = extract_with_retry(attempt)
         if stats is not None:
             stats.add(result)
+        if signals is not None and result.document is not None:
+            missing = missing_share(result.document)
+            signals[row.id] = Signals(result.retries, len(result.errors), use_vision, missing)
         return result.document
 
     return extractor
