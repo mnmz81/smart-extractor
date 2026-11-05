@@ -2,7 +2,7 @@
 
 Usage: scripts/run_eval.sh [--data data/synthetic] [--split dev] [--out reports]
        [--extractor baseline|naive|structured|validated|vision]
-       [--provider claude|gemini] [--model ID] [--concurrency 4]
+       [--model ID] [--concurrency 4]
 
 naive, structured, validated and vision call a paid LLM API once per digital document.
 """
@@ -28,7 +28,7 @@ from smart_extractor.providers import Usage, make_provider
 from smart_extractor.retry import RetryStats
 from smart_extractor.schemas import Invoice, PartialReceipt, Receipt
 
-_DEFAULT_MODELS = {"claude": "claude-haiku-5-5", "gemini": "gemini-3.8-flash"}
+_DEFAULT_MODEL = "claude-haiku-5-5"
 
 Extractor = Callable[[Path, ManifestRow], Document | None]
 
@@ -129,20 +129,19 @@ def main() -> None:
         choices=["baseline", "naive", "structured", "validated", "vision"],
         default="baseline",
     )
-    parser.add_argument("--provider", choices=["claude", "gemini"], default="claude")
-    parser.add_argument("--model", help="default: haiku for claude, gemini-3.8-flash for gemini")
+    parser.add_argument("--model", help=f"default: {_DEFAULT_MODEL}")
     parser.add_argument(
         "--concurrency", type=int, default=4, help="documents in flight at once (1 = one by one)"
     )
     args = parser.parse_args()
-    model = args.model or _DEFAULT_MODELS[args.provider]
+    model = args.model or _DEFAULT_MODEL
     extractor: Extractor = empty_extractor
     usage: Usage | None = None
     stats = RetryStats()
     if args.extractor != "baseline":
         from smart_extractor.llm import make_extractor  # imported here: llm imports this module
 
-        provider = make_provider(args.provider)
+        provider = make_provider()
         usage = provider.usage
         extractor = make_extractor(args.extractor, model, provider, stats)
     name = f"{args.extractor}-{datetime.now():%Y%m%d-%H%M%S}"

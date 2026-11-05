@@ -9,7 +9,6 @@ from smart_extractor.pricing import cost_usd
 from smart_extractor.providers import (
     AnthropicProvider,
     Attachment,
-    GeminiProvider,
     SchemaFailure,
     Usage,
 )
@@ -77,47 +76,3 @@ def test_cost_uses_per_million_prices_and_is_none_for_unknown_models() -> None:
     usage = Usage(calls=1, input_tokens=1_000_000, output_tokens=2_000_000)
     assert cost_usd("claude-haiku-5-5", usage) == pytest.approx(0.10 + 2 * 0.50)
     assert cost_usd("some-new-model", usage) is None
-
-
-def _gemini_response(text: str | None) -> Any:
-    meta = SimpleNamespace(
-        prompt_token_count=100, candidates_token_count=20, thoughts_token_count=30
-    )
-    return SimpleNamespace(text=text, usage_metadata=meta)
-
-
-def _gemini(response: Any, seen: dict[str, Any] | None = None) -> GeminiProvider:
-    def generate_content(**kwargs: Any) -> Any:
-        if seen is not None:
-            seen.update(kwargs)
-        return response
-
-    client = SimpleNamespace(models=SimpleNamespace(generate_content=generate_content))
-    return GeminiProvider(client)  # type: ignore[arg-type]
-
-
-def test_gemini_parses_json_and_counts_thinking_as_output() -> None:
-    provider = _gemini(_gemini_response('{"total": 2.5}'))
-    assert provider.parse("m", "p", Amount) == Amount(total=2.5)
-    assert provider.usage == Usage(calls=1, input_tokens=100, output_tokens=50)
-
-
-def test_gemini_sends_page_first_and_asks_for_the_json_schema() -> None:
-    seen: dict[str, Any] = {}
-    _gemini(_gemini_response('{"total": 1}'), seen).parse(
-        "m", "p", Amount, Attachment("application/pdf", b"%PDF")
-    )
-    assert seen["contents"][1] == "p"
-    assert seen["contents"][0].inline_data.mime_type == "application/pdf"
-    assert seen["config"].response_mime_type == "application/json"
-    assert seen["config"].response_json_schema["properties"]["total"]
-
-
-def test_gemini_empty_answer_is_none_and_bad_json_is_schema_failure() -> None:
-    assert _gemini(_gemini_response(None)).parse("m", "p", Amount) is None
-    with pytest.raises(SchemaFailure):
-        _gemini(_gemini_response('{"total": "unreadable"}')).parse("m", "p", Amount)
-
-
-def test_gemini_complete_returns_text() -> None:
-    assert _gemini(_gemini_response("hi")).complete("m", "p") == "hi"

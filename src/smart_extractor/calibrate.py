@@ -1,7 +1,7 @@
 """Check what the confidence score is worth: the review-share vs. accuracy curve on a split.
 
-Usage: scripts/calibrate.sh [--data data/synthetic/hard] [--split dev] [--provider claude]
-       [--model ID] [--concurrency 4]
+Usage: scripts/calibrate.sh [--data data/synthetic/hard] [--split dev] [--model ID]
+       [--concurrency 4]
 
 Runs the validated extractor once per document (paid), so approve large runs first.
 """
@@ -13,7 +13,7 @@ from smart_extractor.confidence import Signals, confidence
 from smart_extractor.dataset import load_manifest
 from smart_extractor.metrics import document_passed
 from smart_extractor.providers import make_provider
-from smart_extractor.run_eval import _DEFAULT_MODELS, evaluate
+from smart_extractor.run_eval import _DEFAULT_MODEL, evaluate
 
 Point = tuple[float, bool]  # (confidence, document fully correct)
 
@@ -35,15 +35,14 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", type=Path, required=True)
     parser.add_argument("--split", choices=["dev", "test"], default="dev")
-    parser.add_argument("--provider", choices=["claude", "gemini"], default="claude")
     parser.add_argument("--model")
     parser.add_argument("--concurrency", type=int, default=4)
     args = parser.parse_args()
-    model = args.model or _DEFAULT_MODELS[args.provider]
+    model = args.model or _DEFAULT_MODEL
     from smart_extractor.llm import make_extractor  # imported here: llm imports run_eval
 
     signals: dict[str, Signals] = {}
-    extractor = make_extractor("validated", model, make_provider(args.provider), signals=signals)
+    extractor = make_extractor("validated", model, make_provider(), signals=signals)
     results = evaluate(args.data, args.split, extractor, args.concurrency)
     rows = [r for r in load_manifest(args.data / "manifest.csv") if r.split == args.split]
     # a document with no answer has no signals: confidence 0, it always goes to review

@@ -31,7 +31,7 @@ BuildExtractor = Callable[[dict[str, Signals]], Extractor]
 def _claude_extractor(signals: dict[str, Signals]) -> Extractor:
     from smart_extractor.llm import make_extractor  # imported here: llm imports run_eval
 
-    provider = make_provider("claude")
+    provider = make_provider()
     return make_extractor("validated", "claude-haiku-5-5", provider, signals=signals)
 
 
