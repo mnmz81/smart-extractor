@@ -5,10 +5,8 @@ from smart_extractor.config import Settings
 
 def test_keys_default_to_none(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
     settings = Settings(_env_file=None)
     assert settings.anthropic_api_key is None
-    assert settings.google_api_key is None
 
 
 def test_key_is_read_from_environment(monkeypatch: pytest.MonkeyPatch) -> None:

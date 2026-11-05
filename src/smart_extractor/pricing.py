@@ -8,10 +8,6 @@ _PRICES: dict[str, tuple[float, float]] = {
     "claude-sonnet-5-5": (2.00, 10.00),
     "claude-opus-5-5": (4.00, 20.00),
     "claude-fable-5-1": (10.00, 50.00),
-    # Gemini, paid tier, prompts up to 200K tokens. gemini-3.8-flash doubles on 2027-01-01.
-    "gemini-3.8-flash": (0.75, 3.75),
-    "gemini-3.5-flash-lite": (0.30, 2.50),
-    "gemini-3.1-pro-preview": (2.00, 12.00),
 }
 
 
