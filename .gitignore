@@ -29,3 +29,6 @@ data/public/
 data/synthetic/
 *.sqlite
 *.db
+
+# Playwright MCP scratch
+.playwright-mcp/

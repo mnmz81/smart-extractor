@@ -78,6 +78,23 @@ scripts/uv.sh run uvicorn --factory smart_extractor.api:create_app
 
 There is no authentication and every extraction costs API money: keep it on localhost.
 
+### Web UI
+
+A small Angular app in `web/`, built with the Mushilu-San-UI component library. Drag an
+invoice or receipt into the page and it shows the extracted fields and the confidence score, in
+Hebrew (right-to-left) or English. For a result that needs review, fix a wrong field and save:
+the correction goes through `POST /review/{id}` into the dataset.
+
+```sh
+scripts/uv.sh run uvicorn --factory smart_extractor.api:create_app   # the API, port 8000
+export NODE_AUTH_TOKEN=$(gh auth token)                              # needs the read:packages scope
+cd web && npm install && npm start                                  # the page, port 4200
+```
+
+The dev server proxies `/api` to the API, so no CORS setup is needed. Same limits as the API:
+localhost only, no auth. `@mushilu-san/ui` comes from GitHub Packages, which needs a token even to
+install (`web/.npmrc` reads it from `NODE_AUTH_TOKEN`).
+
 ### Docker
 
 ```sh

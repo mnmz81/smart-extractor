@@ -134,3 +134,8 @@ def test_item_without_its_upload_is_resolved_but_adds_no_label(tmp_path: Path) -
     (tmp_path / "uploads" / "doc-1.pdf").unlink()
     assert client.post(f"/review/{item}").status_code == 200
     assert not (tmp_path / "reviewed").exists()
+
+
+def test_first_run_creates_the_queue_folder(tmp_path: Path) -> None:
+    client = TestClient(create_app(queue_path=tmp_path / "missing" / "dir" / "review.sqlite"))
+    assert client.get("/review").json() == []
