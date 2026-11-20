@@ -1,0 +1,45 @@
+<header class="top">
+  <div>
+    <h1>{{ t('title') }}</h1>
+    <p class="sub">{{ t('subtitle') }}</p>
+  </div>
+  <button muiButton variant="ghost" size="sm" (click)="toggleLang()">{{ t('language') }}</button>
+</header>
+
+<main>
+  @if (result(); as r) {
+    <app-result [result]="r" [kind]="kindOf(r.extraction)" (reset)="clear()" />
+  } @else if (loading()) {
+    <div class="loading" role="status">
+      <mui-spinner size="lg" [label]="t('processing')" />
+      <span>{{ t('processing') }}</span>
+    </div>
+  } @else {
+    <mui-toggle-group type="single" [value]="kind()" (valueChange)="setKind($event)"
+      [attr.aria-label]="t('docType')">
+      <mui-toggle-group-item value="invoice">{{ t('invoice') }}</mui-toggle-group-item>
+      <mui-toggle-group-item value="receipt">{{ t('receipt') }}</mui-toggle-group-item>
+    </mui-toggle-group>
+    <app-dropzone (picked)="run($event)" />
+    @if (error()) {
+      <mui-alert variant="danger" [heading]="t('failed')">{{ error() }}</mui-alert>
+    }
+    <section aria-labelledby="queue-title">
+      <h2 id="queue-title">{{ t('queue') }} ({{ queue().length }})</h2>
+      @if (queue().length === 0) {
+        <p class="sub">{{ t('queueEmpty') }}</p>
+      } @else {
+        <ul class="queue">
+          @for (item of queue(); track item.id) {
+            <li>
+              <button muiButton variant="secondary" (click)="open(item)">
+                <span dir="auto">{{ titleOf(item.extraction) }}</span>
+                <span class="pct">{{ (item.confidence * 100).toFixed(0) }}%</span>
+              </button>
+            </li>
+          }
+        </ul>
+      }
+    </section>
+  }
+</main>

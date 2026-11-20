@@ -1,0 +1,75 @@
+<section class="head">
+  <div class="score">
+    <span class="label">{{ t('confidence') }}</span>
+    <strong>{{ percent() }}%</strong>
+    <mui-progress [value]="percent()" [label]="t('confidence')" />
+  </div>
+  @if (reviewable()) {
+    <mui-badge variant="warning">{{ t('needsReview') }}</mui-badge>
+  } @else {
+    <mui-badge variant="success">{{ t('autoApproved') }}</mui-badge>
+  }
+</section>
+
+<p class="note">{{ reviewable() ? t('reviewNote') : t('autoNote') }}</p>
+
+<div class="grid">
+  @for (key of fields(); track key) {
+    <mui-form-field [label]="t(key)" [controlId]="'f-' + key">
+      <input
+        muiInput
+        [id]="'f-' + key"
+        [value]="value(key)"
+        [readOnly]="!reviewable() || state() !== 'idle'"
+        [attr.inputmode]="isDecimal(key) ? 'decimal' : null"
+        [attr.dir]="'auto'"
+        (input)="setField(key, $any($event.target).value)"
+      />
+    </mui-form-field>
+  }
+</div>
+
+<h2>{{ t('lineItems') }}</h2>
+<div class="lines" role="table" [attr.aria-label]="t('lineItems')">
+  <div class="row head-row" role="row">
+    <span role="columnheader">{{ t('description') }}</span>
+    <span role="columnheader">{{ t('quantity') }}</span>
+    <span role="columnheader">{{ t('unitPrice') }}</span>
+    <span role="columnheader">{{ t('lineTotal') }}</span>
+  </div>
+  @for (line of draft().line_items; track $index) {
+    <div class="row" role="row">
+      @for (col of ['description', 'quantity', 'unit_price', 'total']; track col) {
+        <span role="cell">
+          <input
+            muiInput
+            size="sm"
+            dir="auto"
+            [attr.aria-label]="col === 'description' ? t('description') : col === 'quantity' ? t('quantity') : col === 'unit_price' ? t('unitPrice') : t('lineTotal')"
+            [value]="$any(line)[col]"
+            [readOnly]="!reviewable() || state() !== 'idle'"
+            (input)="setLine($index, col, $any($event.target).value)"
+          />
+        </span>
+      }
+    </div>
+  }
+</div>
+
+@if (error()) {
+  <mui-alert variant="danger" [heading]="t('failed')">{{ error() }}</mui-alert>
+}
+@if (state() === 'saved') {
+  <mui-alert variant="success">{{ t('saved') }}</mui-alert>
+} @else if (state() === 'fixed') {
+  <mui-alert variant="success">{{ t('savedFix') }}</mui-alert>
+}
+
+<div class="actions">
+  @if (reviewable() && (state() === 'idle' || state() === 'saving')) {
+    <button muiButton variant="primary" [loading]="state() === 'saving'" (click)="save()">
+      {{ edited() ? t('saveFix') : t('approve') }}
+    </button>
+  }
+  <button muiButton variant="secondary" (click)="reset.emit()">{{ t('another') }}</button>
+</div>

@@ -43,6 +43,7 @@ def create_app(
     build_extractor: BuildExtractor = _claude_extractor,
 ) -> FastAPI:
     app = FastAPI(title="Smart Extractor")
+    queue_path.parent.mkdir(parents=True, exist_ok=True)  # a fresh clone has no data/private yet
 
     def queue() -> Iterator[sqlite3.Connection]:
         # one connection per request: endpoints run in a thread pool and sqlite3 objects
